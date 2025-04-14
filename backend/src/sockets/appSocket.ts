@@ -25,7 +25,9 @@ export const onSocket = (io: Server) => {
         fileData,
       });
     });
-
+    socket.on("chat-message", ({ roomId, message }) => {
+      socket.to(roomId).emit("receive-message", `${socket.id}: ${message}`);
+    });
     socket.on("disconnect", () => {
       console.log("Client disconnected", socket.id);
     });

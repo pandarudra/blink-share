@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState, useRef } from "react";
 import { socket } from "../utils/socket";
+import toast, { Toaster } from "react-hot-toast";
 
 export const Room = () => {
   const navigate = useNavigate();
@@ -11,10 +12,12 @@ export const Room = () => {
   const [fileURL, setFileURL] = useState("");
   const [users, setUsers] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [messages, setMessages] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(slicedRoomId || "");
-    alert("Room ID copied!");
+    toast.success("Room ID copied to clipboard!");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,12 +39,30 @@ export const Room = () => {
     reader.readAsArrayBuffer(file);
   };
 
+  const sendMessage = () => {
+    if (message.trim()) {
+      socket.emit("chat-message", { roomId, message });
+      setMessages((prev) => [...prev, `You: ${message}`]);
+      setMessage("");
+    }
+  };
   useEffect(() => {
-    if (!roomId) return;
+    socket.on("receive-message", (msg) => {
+      setMessages((prev) => [...prev, msg]);
+    });
 
+    return () => {
+      socket.off("receive-message");
+    };
+  }, []);
+
+  useEffect(() => {
     const storedRoomId = localStorage.getItem("roomId");
-    if (storedRoomId) {
-      socket.emit("join-room", roomId);
+    const activeRoomId = roomId || storedRoomId;
+
+    if (activeRoomId) {
+      socket.emit("join-room", activeRoomId);
+      localStorage.setItem("roomId", activeRoomId);
     }
 
     socket.on("receive-file", ({ sender, fileName, fileData }) => {
@@ -71,9 +92,10 @@ export const Room = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-100 to-blue-200 relative p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-2xl">
-        <h1 className="text-3xl font-bold text-gray-800 text-center mb-6">
-          🎉 Welcome to the Room
+      <Toaster />
+      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-4xl space-y-8">
+        <h1 className="text-3xl font-bold text-gray-800 text-center wfont">
+          Blink Share v1🌟
         </h1>
 
         <div className="flex flex-col md:flex-row md:justify-between gap-6">
@@ -141,6 +163,36 @@ export const Room = () => {
                 <li className="text-gray-500">No users yet</li>
               )}
             </ul>
+          </div>
+        </div>
+
+        {/* Chat UI */}
+        <div className="w-full border rounded-lg p-4 bg-gray-50 shadow-inner">
+          <h2 className="text-lg font-semibold text-gray-700 mb-3">💬 Chat</h2>
+          <div className="max-h-60 overflow-y-auto space-y-2 mb-4">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                className="p-2 bg-white border rounded-md shadow-sm text-sm text-gray-800"
+              >
+                {msg}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Type a message"
+              className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 text-sm"
+            />
+            <button
+              onClick={sendMessage}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+            >
+              Send
+            </button>
           </div>
         </div>
       </div>
